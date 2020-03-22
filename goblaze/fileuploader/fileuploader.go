@@ -3,8 +3,8 @@ package fileuploader
 import (
 	"encoding/json"
 
-	"github.com/jack-ohara/backblazemanager/backblazemanager"
-	"github.com/jack-ohara/backblazemanager/httprequestbuilder"
+	"github.com/jack-ohara/goblaze/goblaze"
+	"github.com/jack-ohara/goblaze/httprequestbuilder"
 )
 
 type GetUploadURLResponse struct {
@@ -16,14 +16,14 @@ type GetUploadURLResponse struct {
 // type UploadFileResponse struct {
 // }
 
-func UploadFile(filepath string, authorizationInfo backblazemanager.AuthorizeAccountResponse, bucketID string) GetUploadURLResponse {
+func UploadFile(filepath string, authorizationInfo goblaze.AuthorizeAccountResponse, bucketID string) GetUploadURLResponse {
 	getUploadResponse := getUploadURL(authorizationInfo, bucketID)
 
 	return getUploadResponse
 	//return performUpload(filepath, getUploadResponse)
 }
 
-func getUploadURL(authInfo backblazemanager.AuthorizeAccountResponse, bucketID string) GetUploadURLResponse {
+func getUploadURL(authInfo goblaze.AuthorizeAccountResponse, bucketID string) GetUploadURLResponse {
 	url := authInfo.APIURL + "/b2api/v2/b2_get_upload_url"
 
 	body, _ := json.Marshal(map[string]string{

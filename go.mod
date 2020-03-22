@@ -1,3 +1,3 @@
-module github.com/jack-ohara/backblazemanager
+module github.com/jack-ohara/goblaze
 
 go 1.14

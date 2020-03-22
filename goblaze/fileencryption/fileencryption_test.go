@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/jack-ohara/backblazemanager/backblazemanager/fileencryption/decryption"
-	"github.com/jack-ohara/backblazemanager/backblazemanager/fileencryption/encryption"
+	"github.com/jack-ohara/goblaze/goblaze/fileencryption/decryption"
+	"github.com/jack-ohara/goblaze/goblaze/fileencryption/encryption"
 )
 
 func TestEncryptionAndDecryption(t *testing.T) {

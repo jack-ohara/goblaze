@@ -5,7 +5,7 @@ import (
 	"crypto/cipher"
 	"log"
 
-	"github.com/jack-ohara/backblazemanager/fileencryption/passwordhasher"
+	"github.com/jack-ohara/goblaze/fileencryption/passwordhasher"
 )
 
 func DecryptData(data []byte, passphrase string) []byte {

@@ -1,10 +1,10 @@
-package backblazemanager
+package goblaze
 
 import (
 	"encoding/base64"
 	"encoding/json"
 
-	"github.com/jack-ohara/backblazemanager/httprequestbuilder"
+	"github.com/jack-ohara/goblaze/httprequestbuilder"
 )
 
 type AuthorizeAccountResponse struct {

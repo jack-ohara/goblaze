@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 
-	"github.com/jack-ohara/backblazemanager/fileencryption/passwordhasher"
+	"github.com/jack-ohara/goblaze/fileencryption/passwordhasher"
 )
 
 func EncryptFile(filePath, passphrase string) []byte {
