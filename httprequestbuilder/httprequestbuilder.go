@@ -7,19 +7,24 @@ import (
 	"net/http"
 )
 
-func ExecuteGet(url string, headers map[string]string) []byte {
+type HttpResponse struct {
+	BodyContent []byte
+	Headers     map[string][]string
+}
+
+func ExecuteGet(url string, headers map[string]string) HttpResponse {
 	req, _ := http.NewRequest("GET", url, nil)
 
 	return executeRequest(req, headers)
 }
 
-func ExecutePost(url string, body []byte, headers map[string]string) []byte {
+func ExecutePost(url string, body []byte, headers map[string]string) HttpResponse {
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
 
 	return executeRequest(req, headers)
 }
 
-func executeRequest(request *http.Request, headers map[string]string) []byte {
+func executeRequest(request *http.Request, headers map[string]string) HttpResponse {
 	headers = addDefaultHeaders(headers)
 
 	for key, value := range headers {
@@ -38,7 +43,10 @@ func executeRequest(request *http.Request, headers map[string]string) []byte {
 
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 
-	return bodyBytes
+	return HttpResponse{
+		BodyContent: bodyBytes,
+		Headers:     resp.Header,
+	}
 }
 
 func addDefaultHeaders(otherHeaders map[string]string) map[string]string {

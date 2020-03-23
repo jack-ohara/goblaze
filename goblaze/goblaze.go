@@ -33,9 +33,9 @@ func GetAccountAuthorization(keyID, applicationKey string) AuthorizeAccountRespo
 
 	authorizeAccountRes := AuthorizeAccountResponse{}
 
-	respBody := httprequestbuilder.ExecuteGet("https://api.backblazeb2.com/b2api/v2/b2_authorize_account", headers)
+	resp := httprequestbuilder.ExecuteGet("https://api.backblazeb2.com/b2api/v2/b2_authorize_account", headers)
 
-	json.Unmarshal(respBody, &authorizeAccountRes)
+	json.Unmarshal(resp.BodyContent, &authorizeAccountRes)
 
 	return authorizeAccountRes
 }
