@@ -23,7 +23,17 @@ func main() {
 
 	//fileuploader.UploadFile("/home/jack/test.txt", encryptionPassphrase, authorizationInfo, os.Getenv("BUCKET_ID"))
 
-	downloadResponse := filedownloader.DownloadFile("/home/jack/test.txt", os.Getenv("BUCKET_NAME"), authorizationInfo, encryptionPassphrase)
+	bucketName := authorizationInfo.Allowed.BucketName
+
+	if len(bucketName) == 0 {
+		bucketName = os.Getenv("BUCKET_NAME")
+
+		if len(bucketName) == 0 {
+			log.Fatal("If you are not using a restricted access key, you must provide the BUCKET_NAME")
+		}
+	}
+
+	downloadResponse := filedownloader.DownloadFile("home/jack/test.txt", authorizationInfo.Allowed.BucketName, authorizationInfo, encryptionPassphrase)
 
 	fmt.Println(string(downloadResponse.FileContent))
 }
