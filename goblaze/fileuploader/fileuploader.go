@@ -28,6 +28,7 @@ type UploadFileResponse struct {
 	FileInfo        string
 	FileName        string
 	UploadTimestamp time.Time
+	StatusCode      int
 }
 
 func UploadFile(filepath, encryptionPassphrase string, authorizationInfo goblaze.AuthorizeAccountResponse, bucketID string) UploadFileResponse {
@@ -80,7 +81,7 @@ func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse g
 
 	response := httprequestbuilder.ExecutePost(getUploadURLResponse.UploadURL, encryptedFileContents, headers)
 
-	uploadFileResponse := UploadFileResponse{}
+	uploadFileResponse := UploadFileResponse{StatusCode: response.StatusCode}
 
 	json.Unmarshal(response.BodyContent, &uploadFileResponse)
 

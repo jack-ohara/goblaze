@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/jack-ohara/goblaze/goblaze"
+	"github.com/jack-ohara/goblaze/goblaze/accountauthorization"
 	"github.com/jack-ohara/goblaze/goblaze/filedownloader"
 	"github.com/joho/godotenv"
 )
@@ -19,7 +19,7 @@ func main() {
 
 	encryptionPassphrase := os.Getenv("ENCRYPTION_PASSPHRASE")
 
-	authorizationInfo := goblaze.GetAccountAuthorization(os.Getenv("KEY_ID"), os.Getenv("APPLICATION_ID"))
+	authorizationInfo := accountauthorization.GetAccountAuthorization(os.Getenv("KEY_ID"), os.Getenv("APPLICATION_ID"))
 
 	//fileuploader.UploadFile("/home/jack/test.txt", encryptionPassphrase, authorizationInfo, os.Getenv("BUCKET_ID"))
 

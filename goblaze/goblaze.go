@@ -1,41 +1,37 @@
 package goblaze
 
 import (
-	"encoding/base64"
-	"encoding/json"
-
-	"github.com/jack-ohara/goblaze/httprequestbuilder"
+	"io/ioutil"
+	"log"
+	"time"
 )
 
-type AuthorizeAccountResponse struct {
-	AccountID               string
-	AuthorizationToken      string
-	Allowed                 TokenCapabilities
-	APIURL                  string
-	DownloadURL             string
-	RecommendedPartSize     int
-	AbsoluteMinimumPartSize int
+type uploadedFiles map[string]time.Time
+
+func UploadDirectories(directories ...string) {
+	for _, directoryPath := range directories {
+		for _, filePath := range getFilesNames(directoryPath) {
+
+		}
+	}
 }
 
-type TokenCapabilities struct {
-	BucketID     string
-	BucketName   string
-	Capabilities []string
-	NamePrefix   string
-}
+func getFilePaths(directoryPath string) []string {
+	var files []string
 
-func GetAccountAuthorization(keyID, applicationKey string) AuthorizeAccountResponse {
-	appKeyHeader := base64.StdEncoding.EncodeToString([]byte(keyID + ":" + applicationKey))
+	allFiles, err := ioutil.ReadDir(directoryPath)
 
-	headers := map[string]string{
-		"Authorization": "Basic " + appKeyHeader,
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	authorizeAccountRes := AuthorizeAccountResponse{}
+	for _, file := range allFiles {
+		if file.IsDir() {
+			files = append(files, getFilesPaths(directoryPath+file.Name())...)
+		} else {
+			files = append(files, directoryPath+file.Name())
+		}
+	}
 
-	resp := httprequestbuilder.ExecuteGet("https://api.backblazeb2.com/b2api/v2/b2_authorize_account", headers)
-
-	json.Unmarshal(resp.BodyContent, &authorizeAccountRes)
-
-	return authorizeAccountRes
+	return files
 }
