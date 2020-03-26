@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/jack-ohara/goblaze/fileencryption/encryption"
-	"github.com/jack-ohara/goblaze/goblaze"
+	"github.com/jack-ohara/goblaze/goblaze/accountauthorization"
 	"github.com/jack-ohara/goblaze/httprequestbuilder"
 )
 
@@ -31,13 +31,13 @@ type UploadFileResponse struct {
 	StatusCode      int
 }
 
-func UploadFile(filepath, encryptionPassphrase string, authorizationInfo goblaze.AuthorizeAccountResponse, bucketID string) UploadFileResponse {
+func UploadFile(filepath, encryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, bucketID string) UploadFileResponse {
 	getUploadResponse := getUploadURL(authorizationInfo, bucketID)
 
 	return performUpload(filepath, encryptionPassphrase, getUploadResponse)
 }
 
-func getUploadURL(authInfo goblaze.AuthorizeAccountResponse, bucketID string) getUploadURLResponse {
+func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucketID string) getUploadURLResponse {
 	url := authInfo.APIURL + "/b2api/v2/b2_get_upload_url"
 
 	body, _ := json.Marshal(map[string]string{
