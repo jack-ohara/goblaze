@@ -1,41 +1,122 @@
 package goblaze
 
 import (
-	"encoding/base64"
 	"encoding/json"
+	"io/ioutil"
+	"log"
+	"os"
+	"path"
+	"time"
 
-	"github.com/jack-ohara/goblaze/httprequestbuilder"
+	"github.com/jack-ohara/goblaze/goblaze/accountauthorization"
+	"github.com/jack-ohara/goblaze/goblaze/fileuploader"
 )
 
-type AuthorizeAccountResponse struct {
-	AccountID               string
-	AuthorizationToken      string
-	Allowed                 TokenCapabilities
-	APIURL                  string
-	DownloadURL             string
-	RecommendedPartSize     int
-	AbsoluteMinimumPartSize int
-}
+type uploadedFiles map[string]time.Time
 
-type TokenCapabilities struct {
-	BucketID     string
-	BucketName   string
-	Capabilities []string
-	NamePrefix   string
-}
+func UploadDirectories(directories []string, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
+	uploadedFiles := getUploadedFiles()
 
-func GetAccountAuthorization(keyID, applicationKey string) AuthorizeAccountResponse {
-	appKeyHeader := base64.StdEncoding.EncodeToString([]byte(keyID + ":" + applicationKey))
+	for _, directoryPath := range directories {
+		for _, filePath := range getFilePaths(directoryPath) {
+			if fileShouldBeUploaded(filePath, uploadedFiles) {
+				uploadResponse := fileuploader.UploadFile(filePath, encryptionPassphrase, authorizationInfo, bucketID)
 
-	headers := map[string]string{
-		"Authorization": "Basic " + appKeyHeader,
+				if uploadResponse.StatusCode == 200 {
+					uploadedFiles[filePath] = time.Now()
+				}
+			}
+		}
 	}
 
-	authorizeAccountRes := AuthorizeAccountResponse{}
+	writeUploadedFiles(uploadedFiles)
+}
 
-	resp := httprequestbuilder.ExecuteGet("https://api.backblazeb2.com/b2api/v2/b2_authorize_account", headers)
+func getFilePaths(directoryPath string) []string {
+	var files []string
 
-	json.Unmarshal(resp.BodyContent, &authorizeAccountRes)
+	allFiles, err := ioutil.ReadDir(directoryPath)
 
-	return authorizeAccountRes
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, file := range allFiles {
+		if file.IsDir() {
+			files = append(files, getFilePaths(path.Join(directoryPath, file.Name()))...)
+		} else {
+			files = append(files, path.Join(directoryPath, file.Name()))
+		}
+	}
+
+	return files
+}
+
+func getConfigDirectory() string {
+	userHomeDir, err := os.UserHomeDir()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return path.Join(userHomeDir, ".goblaze")
+}
+
+func getConfigFilePath() string {
+	return path.Join(getConfigDirectory(), "uploadedFiles.json")
+}
+
+func getUploadedFiles() uploadedFiles {
+	if _, err := os.Stat(getConfigDirectory()); os.IsNotExist(err) {
+		os.MkdirAll(getConfigDirectory(), os.ModePerm)
+	}
+
+	if _, err := os.Stat(getConfigFilePath()); os.IsNotExist(err) {
+		file, err := os.Create(getConfigFilePath())
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		file.Close()
+	}
+
+	fileContents, err := ioutil.ReadFile(getConfigFilePath())
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	uploadedFiles := make(uploadedFiles)
+	json.Unmarshal(fileContents, &uploadedFiles)
+
+	return uploadedFiles
+}
+
+func fileShouldBeUploaded(filePath string, uploadedFiles uploadedFiles) bool {
+	if lastUploadedTime, fileHasBeenUploaded := uploadedFiles[filePath]; fileHasBeenUploaded {
+		fileInfo, err := os.Stat(filePath)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		return lastUploadedTime.Before(fileInfo.ModTime().Local())
+	}
+
+	return true
+}
+
+func writeUploadedFiles(uploadedFiles uploadedFiles) {
+	jsonContent, err := json.Marshal(uploadedFiles)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = ioutil.WriteFile(getConfigFilePath(), jsonContent, os.ModePerm)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 }

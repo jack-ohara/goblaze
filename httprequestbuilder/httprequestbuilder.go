@@ -8,6 +8,7 @@ import (
 )
 
 type HttpResponse struct {
+	StatusCode  int
 	BodyContent []byte
 	Headers     map[string][]string
 }
@@ -46,6 +47,7 @@ func executeRequest(request *http.Request, headers map[string]string) HttpRespon
 	return HttpResponse{
 		BodyContent: bodyBytes,
 		Headers:     resp.Header,
+		StatusCode:  resp.StatusCode,
 	}
 }
 
