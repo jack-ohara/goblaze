@@ -1,7 +1,6 @@
 package goblaze
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -10,12 +9,11 @@ import (
 
 	"github.com/jack-ohara/goblaze/goblaze/accountauthorization"
 	"github.com/jack-ohara/goblaze/goblaze/fileuploader"
+	"github.com/jack-ohara/goblaze/goblaze/uploadedfiles"
 )
 
-type uploadedFiles map[string]time.Time
-
 func UploadDirectories(directories []string, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
-	uploadedFiles := getUploadedFiles()
+	uploadedFiles := uploadedfiles.GetUploadedFiles()
 
 	for _, directoryPath := range directories {
 		for _, filePath := range getFilePaths(directoryPath) {
@@ -31,7 +29,7 @@ func UploadDirectories(directories []string, encryptionPassphrase, bucketID stri
 		}
 	}
 
-	writeUploadedFiles(uploadedFiles)
+	uploadedfiles.WriteUploadedFiles(uploadedFiles)
 }
 
 func getFilePaths(directoryPath string) []string {
@@ -54,48 +52,7 @@ func getFilePaths(directoryPath string) []string {
 	return files
 }
 
-func getConfigDirectory() string {
-	userHomeDir, err := os.UserHomeDir()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return path.Join(userHomeDir, ".goblaze")
-}
-
-func getConfigFilePath() string {
-	return path.Join(getConfigDirectory(), "uploadedFiles.json")
-}
-
-func getUploadedFiles() uploadedFiles {
-	if _, err := os.Stat(getConfigDirectory()); os.IsNotExist(err) {
-		os.MkdirAll(getConfigDirectory(), os.ModePerm)
-	}
-
-	if _, err := os.Stat(getConfigFilePath()); os.IsNotExist(err) {
-		file, err := os.Create(getConfigFilePath())
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		file.Close()
-	}
-
-	fileContents, err := ioutil.ReadFile(getConfigFilePath())
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	uploadedFiles := make(uploadedFiles)
-	json.Unmarshal(fileContents, &uploadedFiles)
-
-	return uploadedFiles
-}
-
-func fileShouldBeUploaded(filePath string, uploadedFiles uploadedFiles) bool {
+func fileShouldBeUploaded(filePath string, uploadedFiles uploadedfiles.UploadedFiles) bool {
 	if lastUploadedTime, fileHasBeenUploaded := uploadedFiles[filePath]; fileHasBeenUploaded {
 		fileInfo, err := os.Stat(filePath)
 
@@ -107,18 +64,4 @@ func fileShouldBeUploaded(filePath string, uploadedFiles uploadedFiles) bool {
 	}
 
 	return true
-}
-
-func writeUploadedFiles(uploadedFiles uploadedFiles) {
-	jsonContent, err := json.Marshal(uploadedFiles)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = ioutil.WriteFile(getConfigFilePath(), jsonContent, os.ModePerm)
-
-	if err != nil {
-		log.Fatal(err)
-	}
 }
