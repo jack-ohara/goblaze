@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -31,13 +32,27 @@ type UploadFileResponse struct {
 	StatusCode      int
 }
 
-func UploadFile(filepath, encryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, bucketID string) UploadFileResponse {
-	getUploadResponse := getUploadURL(authorizationInfo, bucketID)
+var getUploadResponse *getUploadURLResponse
 
-	return performUpload(filepath, encryptionPassphrase, getUploadResponse)
+func UploadFile(filepath, encryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, bucketID string) UploadFileResponse {
+	var uploadResponse UploadFileResponse
+
+	for numberOfAttempts := 0; numberOfAttempts < 5; numberOfAttempts++ {
+		if getUploadResponse == nil || numberOfAttempts > 0 {
+			getUploadResponse = getUploadURL(authorizationInfo, bucketID)
+		}
+
+		uploadResponse = performUpload(filepath, encryptionPassphrase, getUploadResponse)
+
+		if uploadResponse.StatusCode == 200 {
+			break
+		}
+	}
+
+	return uploadResponse
 }
 
-func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucketID string) getUploadURLResponse {
+func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucketID string) *getUploadURLResponse {
 	url := authInfo.APIURL + "/b2api/v2/b2_get_upload_url"
 
 	body, _ := json.Marshal(map[string]string{
@@ -54,10 +69,10 @@ func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucket
 
 	json.Unmarshal(response.BodyContent, &getUploadURLResponse)
 
-	return getUploadURLResponse
+	return &getUploadURLResponse
 }
 
-func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse getUploadURLResponse) UploadFileResponse {
+func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse *getUploadURLResponse) UploadFileResponse {
 	encryptedFileContents := encryption.EncryptFile(filepath, encryptionPassphrase)
 
 	hash := sha1.New()
@@ -83,7 +98,11 @@ func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse g
 
 	uploadFileResponse := UploadFileResponse{StatusCode: response.StatusCode}
 
-	json.Unmarshal(response.BodyContent, &uploadFileResponse)
+	if uploadFileResponse.StatusCode != 200 {
+		log.Printf("Upload file failed with status code %d. Error: %s", uploadFileResponse.StatusCode, string(response.BodyContent))
+	} else {
+		json.Unmarshal(response.BodyContent, &uploadFileResponse)
+	}
 
 	return uploadFileResponse
 }

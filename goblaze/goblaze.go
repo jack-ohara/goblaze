@@ -24,6 +24,8 @@ func UploadDirectories(directories []string, encryptionPassphrase, bucketID stri
 
 				if uploadResponse.StatusCode == 200 {
 					uploadedFiles[filePath] = time.Now()
+				} else {
+					log.Printf("The uploading of the file %s returned a status code of %d", filePath, uploadResponse.StatusCode)
 				}
 			}
 		}
