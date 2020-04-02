@@ -21,7 +21,7 @@ func UploadDirectories(directories []string, encryptionPassphrase, bucketID stri
 				uploadResponse := fileuploader.UploadFile(filePath, encryptionPassphrase, authorizationInfo, bucketID)
 
 				if uploadResponse.StatusCode == 200 {
-					uploadedFiles[filePath] = time.Now()
+					uploadedFiles[filePath] = uploadedfiles.UploadedFileInfo{LastUploadedTime: time.Now(), FileID: uploadResponse.FileID}
 				} else {
 					log.Printf("The uploading of the file %s returned a status code of %d", filePath, uploadResponse.StatusCode)
 				}
@@ -53,14 +53,14 @@ func getFilePaths(directoryPath string) []string {
 }
 
 func fileShouldBeUploaded(filePath string, uploadedFiles uploadedfiles.UploadedFiles) bool {
-	if lastUploadedTime, fileHasBeenUploaded := uploadedFiles[filePath]; fileHasBeenUploaded {
+	if uploadedFileInfo, fileHasBeenUploaded := uploadedFiles[filePath]; fileHasBeenUploaded {
 		fileInfo, err := os.Stat(filePath)
 
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		return lastUploadedTime.Before(fileInfo.ModTime().Local())
+		return uploadedFileInfo.LastUploadedTime.Before(fileInfo.ModTime().Local())
 	}
 
 	return true

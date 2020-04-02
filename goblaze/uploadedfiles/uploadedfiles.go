@@ -9,7 +9,12 @@ import (
 	"time"
 )
 
-type UploadedFiles map[string]time.Time
+type UploadedFileInfo struct {
+	LastUploadedTime time.Time
+	FileID           string
+}
+
+type UploadedFiles map[string]UploadedFileInfo
 
 func GetUploadedFiles() UploadedFiles {
 	if _, err := os.Stat(getConfigDirectory()); os.IsNotExist(err) {
