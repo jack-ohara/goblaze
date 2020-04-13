@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/jack-ohara/goblaze/httprequestbuilder"
 	"log"
 	"os"
 
@@ -22,19 +23,11 @@ func main() {
 
 	goblaze.UploadDirectories(os.Args[1:], encryptionPassphrase, os.Getenv("BUCKET_ID"), authorizationInfo)
 
-	//fileuploader.UploadFile("/home/jack/test.txt", encryptionPassphrase, authorizationInfo, os.Getenv("BUCKET_ID"))
+	httprequestbuilder.ExecutePost(authorizationInfo.APIURL + "/b2api/v2/b2_list_file_names", []byte("{\"bucketId\": \""+os.Getenv("BUCKET_ID")+"\"}"), map[string]string{"Authorization": authorizationInfo.AuthorizationToken})
 
-	// bucketName := authorizationInfo.Allowed.BucketName
+	// fileuploader.UploadFile("/home/jack/test.txt", encryptionPassphrase, authorizationInfo, os.Getenv("BUCKET_ID"))
 
-	// if len(bucketName) == 0 {
-	// 	bucketName = os.Getenv("BUCKET_NAME")
-
-	// 	if len(bucketName) == 0 {
-	// 		log.Fatal("If you are not using a restricted access key, you must provide the BUCKET_NAME")
-	// 	}
-	// }
-
-	// downloadResponse := filedownloader.DownloadFile("home/jack/test.txt", authorizationInfo.Allowed.BucketName, authorizationInfo, encryptionPassphrase)
+	// downloadResponse := filedownloader.DownloadFile("/home/jack/Documents/Backup-Test/file1.txt", authorizationInfo, encryptionPassphrase)
 
 	// fmt.Println(string(downloadResponse.FileContent))
 }
