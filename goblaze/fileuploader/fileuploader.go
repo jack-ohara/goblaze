@@ -17,6 +17,7 @@ type getUploadURLResponse struct {
 	BucketID           string
 	UploadURL          string
 	AuthorizationToken string
+	StatusCode         int
 }
 
 type UploadFileResponse struct {
@@ -32,27 +33,13 @@ type UploadFileResponse struct {
 	StatusCode      int
 }
 
-var getUploadResponse *getUploadURLResponse
-
 func UploadFile(filepath, encryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, bucketID string) UploadFileResponse {
-	var uploadResponse UploadFileResponse
+	getUploadResponse := getUploadURL(authorizationInfo, bucketID)
 
-	for numberOfAttempts := 0; numberOfAttempts < 5; numberOfAttempts++ {
-		if getUploadResponse == nil || numberOfAttempts > 0 {
-			getUploadResponse = getUploadURL(authorizationInfo, bucketID)
-		}
-
-		uploadResponse = performUpload(filepath, encryptionPassphrase, getUploadResponse)
-
-		if uploadResponse.StatusCode == 200 {
-			break
-		}
-	}
-
-	return uploadResponse
+	return performUpload(filepath, encryptionPassphrase, getUploadResponse)
 }
 
-func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucketID string) *getUploadURLResponse {
+func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucketID string) getUploadURLResponse {
 	url := authInfo.APIURL + "/b2api/v2/b2_get_upload_url"
 
 	body, _ := json.Marshal(map[string]string{
@@ -65,14 +52,14 @@ func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucket
 
 	response := httprequestbuilder.ExecutePost(url, body, headers)
 
-	getUploadURLResponse := getUploadURLResponse{}
+	getUploadURLResponse := getUploadURLResponse{StatusCode: response.StatusCode}
 
 	json.Unmarshal(response.BodyContent, &getUploadURLResponse)
 
-	return &getUploadURLResponse
+	return getUploadURLResponse
 }
 
-func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse *getUploadURLResponse) UploadFileResponse {
+func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse getUploadURLResponse) UploadFileResponse {
 	encryptedFileContents := encryption.EncryptFile(filepath, encryptionPassphrase)
 
 	hash := sha1.New()
