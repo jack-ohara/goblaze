@@ -7,7 +7,8 @@ import (
 	"strings"
 
 	"github.com/jack-ohara/goblaze/fileencryption/decryption"
-	"github.com/jack-ohara/goblaze/goblaze"
+	"github.com/jack-ohara/goblaze/goblaze/accountauthorization"
+	"github.com/jack-ohara/goblaze/goblaze/uploadedfiles"
 	"github.com/jack-ohara/goblaze/httprequestbuilder"
 )
 
@@ -21,20 +22,24 @@ type DownloadFileResponse struct {
 	DownloadFile is a function for downloading and decrypting
 	the specified file from	the specified bucket
 */
-func DownloadFile(filename, bucketName string,
-	authorizeAccountResponse goblaze.AuthorizeAccountResponse,
-	decryptionPassphrase string) DownloadFileResponse {
-	if strings.HasPrefix(filename, "/") {
-		filename = filename[1:]
+func DownloadFile(filename string, authorizeAccountResponse accountauthorization.AuthorizeAccountResponse, decryptionPassphrase string) DownloadFileResponse {
+	fileID := getFileID(filename)
+
+	if fileID == "" {
+		log.Fatalf("File %s has not previously been uploaded, so it can't be downloaded", filename)
 	}
 
-	url := authorizeAccountResponse.APIURL + "/file/" + bucketName + "/" + filename
+	url := authorizeAccountResponse.DownloadURL + "/b2api/v2/b2_download_file_by_id?fileId=" + fileID
 
 	headers := map[string]string{
 		"Authorization": authorizeAccountResponse.AuthorizationToken,
 	}
 
 	response := httprequestbuilder.ExecuteGet(url, headers)
+
+	if response.StatusCode != 200 {
+		log.Fatalf("Download failed with response code %d. Error: %s", response.StatusCode, string(response.BodyContent))
+	}
 
 	encryptedContent := response.BodyContent
 
@@ -55,4 +60,14 @@ func DownloadFile(filename, bucketName string,
 		FileName:    response.Headers["X-Bz-File-Name"][0],
 		FileContent: fileContent,
 	}
+}
+
+func getFileID(filename string) string {
+	uploadedFiles := uploadedfiles.GetUploadedFiles()
+
+	if uploadedFileInfo, fileHasBeenUploaded := uploadedFiles[filename]; fileHasBeenUploaded {
+		return uploadedFileInfo.FileID
+	}
+
+	return ""
 }

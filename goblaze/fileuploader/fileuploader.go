@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ type getUploadURLResponse struct {
 	BucketID           string
 	UploadURL          string
 	AuthorizationToken string
+	StatusCode         int
 }
 
 type UploadFileResponse struct {
@@ -50,7 +52,7 @@ func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucket
 
 	response := httprequestbuilder.ExecutePost(url, body, headers)
 
-	getUploadURLResponse := getUploadURLResponse{}
+	getUploadURLResponse := getUploadURLResponse{StatusCode: response.StatusCode}
 
 	json.Unmarshal(response.BodyContent, &getUploadURLResponse)
 
@@ -83,7 +85,11 @@ func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse g
 
 	uploadFileResponse := UploadFileResponse{StatusCode: response.StatusCode}
 
-	json.Unmarshal(response.BodyContent, &uploadFileResponse)
+	if uploadFileResponse.StatusCode != 200 {
+		log.Printf("Upload file failed with status code %d. Error: %s", uploadFileResponse.StatusCode, string(response.BodyContent))
+	} else {
+		json.Unmarshal(response.BodyContent, &uploadFileResponse)
+	}
 
 	return uploadFileResponse
 }

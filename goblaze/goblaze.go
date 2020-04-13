@@ -1,38 +1,38 @@
 package goblaze
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/jack-ohara/goblaze/goblaze/accountauthorization"
 	"github.com/jack-ohara/goblaze/goblaze/fileuploader"
+	"github.com/jack-ohara/goblaze/goblaze/uploadedfiles"
 )
 
-type uploadedFiles map[string]time.Time
 
 func UploadDirectories(directories []string, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
-	uploadedFiles := getUploadedFiles()
+	uploadedFiles := uploadedfiles.GetUploadedFiles()
+	lock := sync.RWMutex{}
+
+	var wg sync.WaitGroup
 
 	for _, directoryPath := range directories {
-		for _, filePath := range getFilePaths(directoryPath) {
-			if fileShouldBeUploaded(filePath, uploadedFiles) {
-				uploadResponse := fileuploader.UploadFile(filePath, encryptionPassphrase, authorizationInfo, bucketID)
+		for _, filePath := range getFilePaths(directoryPath, uploadedFiles) {
+			wg.Add(1)
 
-				if uploadResponse.StatusCode == 200 {
-					uploadedFiles[filePath] = time.Now()
-				}
-			}
+			go uploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo, &lock, &uploadedFiles, &wg)
 		}
 	}
 
-	writeUploadedFiles(uploadedFiles)
+	wg.Wait()
+	uploadedfiles.WriteUploadedFiles(uploadedFiles)
 }
 
-func getFilePaths(directoryPath string) []string {
+func getFilePaths(directoryPath string, uploadedFiles uploadedfiles.UploadedFiles) []string {
 	var files []string
 
 	allFiles, err := ioutil.ReadDir(directoryPath)
@@ -43,80 +43,48 @@ func getFilePaths(directoryPath string) []string {
 
 	for _, file := range allFiles {
 		if file.IsDir() {
-			files = append(files, getFilePaths(path.Join(directoryPath, file.Name()))...)
+			files = append(files, getFilePaths(path.Join(directoryPath, file.Name()), uploadedFiles)...)
 		} else {
-			files = append(files, path.Join(directoryPath, file.Name()))
+			filePath := path.Join(directoryPath, file.Name())
+
+			if fileShouldBeUploaded(filePath, uploadedFiles) {
+				files = append(files, filePath)
+			}
 		}
 	}
 
 	return files
 }
 
-func getConfigDirectory() string {
-	userHomeDir, err := os.UserHomeDir()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return path.Join(userHomeDir, ".goblaze")
-}
-
-func getConfigFilePath() string {
-	return path.Join(getConfigDirectory(), "uploadedFiles.json")
-}
-
-func getUploadedFiles() uploadedFiles {
-	if _, err := os.Stat(getConfigDirectory()); os.IsNotExist(err) {
-		os.MkdirAll(getConfigDirectory(), os.ModePerm)
-	}
-
-	if _, err := os.Stat(getConfigFilePath()); os.IsNotExist(err) {
-		file, err := os.Create(getConfigFilePath())
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		file.Close()
-	}
-
-	fileContents, err := ioutil.ReadFile(getConfigFilePath())
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	uploadedFiles := make(uploadedFiles)
-	json.Unmarshal(fileContents, &uploadedFiles)
-
-	return uploadedFiles
-}
-
-func fileShouldBeUploaded(filePath string, uploadedFiles uploadedFiles) bool {
-	if lastUploadedTime, fileHasBeenUploaded := uploadedFiles[filePath]; fileHasBeenUploaded {
+func fileShouldBeUploaded(filePath string, uploadedFiles uploadedfiles.UploadedFiles) bool {
+	if uploadedFileInfo, fileHasBeenUploaded := uploadedFiles[filePath]; fileHasBeenUploaded {
 		fileInfo, err := os.Stat(filePath)
 
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		return lastUploadedTime.Before(fileInfo.ModTime().Local())
+		return uploadedFileInfo.LastUploadedTime.Before(fileInfo.ModTime().Local())
 	}
 
 	return true
 }
 
-func writeUploadedFiles(uploadedFiles uploadedFiles) {
-	jsonContent, err := json.Marshal(uploadedFiles)
+func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse, lock *sync.RWMutex, uploadedFiles *uploadedfiles.UploadedFiles, wg *sync.WaitGroup) {
+	uploadResponse := fileuploader.UploadFile(filePath, encryptionPassphrase, authorizationInfo, bucketID)
 
-	if err != nil {
-		log.Fatal(err)
+	if uploadResponse.StatusCode == 200 {
+		writeUploadedFileToMap(lock, uploadedFiles, filePath, uploadResponse.FileID)
+	} else {
+		log.Printf("The uploading of the file %s returned a status code of %d", filePath, uploadResponse.StatusCode)
 	}
 
-	err = ioutil.WriteFile(getConfigFilePath(), jsonContent, os.ModePerm)
+	wg.Done()
+}
 
-	if err != nil {
-		log.Fatal(err)
-	}
+func writeUploadedFileToMap(lock *sync.RWMutex, uploadedFiles *uploadedfiles.UploadedFiles, filePath, fileID string) {
+	(*lock).Lock()
+	defer (*lock).Unlock()
+	log.Printf("Adding %s to uploadedFiles. FileId: %s\n", filePath, fileID)
+	(*uploadedFiles)[filePath] = uploadedfiles.UploadedFileInfo{LastUploadedTime: time.Now(), FileID: fileID}
 }
