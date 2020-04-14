@@ -2,10 +2,11 @@ package httprequestbuilder
 
 import (
 	"bytes"
-	"github.com/google/uuid"
 	"io/ioutil"
 	"log"
 	"net/http"
+
+	"github.com/google/uuid"
 )
 
 type HttpResponse struct {
@@ -37,7 +38,7 @@ func executeRequest(request *http.Request, headers map[string]string) HttpRespon
 
 	client := &http.Client{}
 
-	log.Printf("Executing http request %s: %+v\n", requestId.String(), *request)
+	//log.Printf("Executing http request %s: %+v\n", requestId.String(), *request)
 
 	resp, err := client.Do(request)
 
@@ -57,8 +58,8 @@ func executeRequest(request *http.Request, headers map[string]string) HttpRespon
 
 	log.Printf("Request %s response: %+v", requestId.String(), struct {
 		StatusCode int
-		Headers map[string][]string
-		Body string
+		Headers    map[string][]string
+		Body       string
 	}{StatusCode: httpResponse.StatusCode, Headers: httpResponse.Headers, Body: string(httpResponse.BodyContent)})
 
 	return httpResponse
