@@ -13,7 +13,6 @@ import (
 	"github.com/jack-ohara/goblaze/goblaze/uploadedfiles"
 )
 
-
 func UploadDirectories(directories []string, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
 	uploadedFiles := uploadedfiles.GetUploadedFiles()
 	lock := sync.RWMutex{}
@@ -71,7 +70,7 @@ func fileShouldBeUploaded(filePath string, uploadedFiles uploadedfiles.UploadedF
 }
 
 func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse, lock *sync.RWMutex, uploadedFiles *uploadedfiles.UploadedFiles, wg *sync.WaitGroup) {
-	uploadResponse := fileuploader.UploadFile(filePath, encryptionPassphrase, authorizationInfo, bucketID)
+	uploadResponse := fileuploader.UploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
 
 	if uploadResponse.StatusCode == 200 {
 		writeUploadedFileToMap(lock, uploadedFiles, filePath, uploadResponse.FileID)

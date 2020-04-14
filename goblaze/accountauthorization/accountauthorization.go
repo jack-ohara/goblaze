@@ -13,8 +13,8 @@ type AuthorizeAccountResponse struct {
 	Allowed                 TokenCapabilities
 	APIURL                  string
 	DownloadURL             string
-	RecommendedPartSize     int
-	AbsoluteMinimumPartSize int
+	RecommendedPartSize     int64
+	AbsoluteMinimumPartSize int64
 }
 
 type TokenCapabilities struct {

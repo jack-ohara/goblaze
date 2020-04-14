@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -33,10 +34,28 @@ type UploadFileResponse struct {
 	StatusCode      int
 }
 
-func UploadFile(filepath, encryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, bucketID string) UploadFileResponse {
+func UploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
+	fileInfo, err := os.Stat(filePath)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if fileInfo.Size() >= authorizationInfo.RecommendedPartSize {
+		return uploadLargeFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
+	}
+
+	return uploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
+}
+
+func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
 	getUploadResponse := getUploadURL(authorizationInfo, bucketID)
 
-	return performUpload(filepath, encryptionPassphrase, getUploadResponse)
+	return performUpload(filePath, encryptionPassphrase, getUploadResponse)
+}
+
+func uploadLargeFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
+	return UploadFileResponse{}
 }
 
 func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucketID string) getUploadURLResponse {
@@ -59,8 +78,8 @@ func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucket
 	return getUploadURLResponse
 }
 
-func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse getUploadURLResponse) UploadFileResponse {
-	encryptedFileContents := encryption.EncryptFile(filepath, encryptionPassphrase)
+func performUpload(filePath, encryptionPassphrase string, getUploadURLResponse getUploadURLResponse) UploadFileResponse {
+	encryptedFileContents := encryption.EncryptFile(filePath, encryptionPassphrase)
 
 	hash := sha1.New()
 
@@ -68,10 +87,10 @@ func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse g
 
 	fileSha1 := hex.EncodeToString(hash.Sum(nil))
 
-	uploadFileName := filepath
+	uploadFileName := filePath
 
-	if strings.HasPrefix(filepath, "/") || strings.HasPrefix(filepath, "\\") {
-		uploadFileName = filepath[1:]
+	if strings.HasPrefix(filePath, "/") || strings.HasPrefix(filePath, "\\") {
+		uploadFileName = filePath[1:]
 	}
 
 	headers := map[string]string{
