@@ -20,5 +20,7 @@ func TestLargeFileUpload(t *testing.T) {
 
 	response := fileuploader.UploadFile("/home/jack/Documents/Backup-Test/Coppice_06-06-2018.zip", os.Getenv("ENCRYPTION_PASSPHRASE"), os.Getenv("BUCKET_ID"), authorizationInfo)
 
-	t.Logf("%+v\n", response)
+	if response.StatusCode != 200 {
+		t.Fatalf("Upload file returned status %d. Expected 200\n", response.StatusCode)
+	}
 }

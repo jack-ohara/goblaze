@@ -12,6 +12,7 @@ import (
 type UploadedFileInfo struct {
 	LastUploadedTime time.Time
 	FileID           string
+	LargeFile        bool
 }
 
 type UploadedFiles map[string]UploadedFileInfo
@@ -44,7 +45,7 @@ func GetUploadedFiles() UploadedFiles {
 }
 
 func WriteUploadedFiles(uploadedFiles UploadedFiles) {
-	jsonContent, err := json.MarshalIndent(uploadedFiles, "", "    ")
+	jsonContent, err := json.MarshalIndent(uploadedFiles, "", "  ")
 
 	if err != nil {
 		log.Fatal(err)

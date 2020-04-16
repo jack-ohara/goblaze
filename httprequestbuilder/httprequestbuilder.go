@@ -5,8 +5,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-
-	"github.com/google/uuid"
 )
 
 type HttpResponse struct {
@@ -28,7 +26,7 @@ func ExecutePost(url string, body []byte, headers map[string]string) HttpRespons
 }
 
 func executeRequest(request *http.Request, headers map[string]string) HttpResponse {
-	requestId := uuid.New()
+	// requestId := uuid.New()
 
 	headers = addDefaultHeaders(headers)
 
@@ -38,7 +36,7 @@ func executeRequest(request *http.Request, headers map[string]string) HttpRespon
 
 	client := &http.Client{}
 
-	//log.Printf("Executing http request %s: %+v\n", requestId.String(), *request)
+	// log.Printf("Executing http request %s: %+v\n", requestId.String(), *request)
 
 	resp, err := client.Do(request)
 
@@ -56,11 +54,11 @@ func executeRequest(request *http.Request, headers map[string]string) HttpRespon
 		StatusCode:  resp.StatusCode,
 	}
 
-	log.Printf("Request %s response: %+v", requestId.String(), struct {
-		StatusCode int
-		Headers    map[string][]string
-		Body       string
-	}{StatusCode: httpResponse.StatusCode, Headers: httpResponse.Headers, Body: string(httpResponse.BodyContent)})
+	// log.Printf("Request %s response: %+v", requestId.String(), struct {
+	// 	StatusCode int
+	// 	Headers    map[string][]string
+	// 	Body       string
+	// }{StatusCode: httpResponse.StatusCode, Headers: httpResponse.Headers, Body: string(httpResponse.BodyContent)})
 
 	return httpResponse
 }
