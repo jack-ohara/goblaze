@@ -15,7 +15,7 @@ import (
 	"github.com/jack-ohara/goblaze/goblaze/uploadedfiles"
 )
 
-func UploadDirectories(directoryPath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
+func UploadDirectory(directoryPath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
 	uploadedFiles := uploadedfiles.GetUploadedFiles()
 	lock := sync.RWMutex{}
 
