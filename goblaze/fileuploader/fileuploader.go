@@ -5,7 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"math"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jack-ohara/goblaze/fileencryption/encryption"
@@ -18,6 +22,35 @@ type getUploadURLResponse struct {
 	UploadURL          string
 	AuthorizationToken string
 	StatusCode         int
+}
+
+type startLargeFileResponse struct {
+	AccountID       string
+	Action          string
+	BucketID        string
+	ContentLength   int
+	ContentSha1     string
+	ContentType     string
+	FileID          string
+	FileName        string
+	UploadTimestamp time.Time
+	StatusCode      int
+}
+
+type getUploadPartURLResponse struct {
+	FileID             string
+	UploadURL          string
+	AuthorizationToken string
+	StatusCode         int
+}
+
+type uploadPartResponse struct {
+	FileID          string
+	PartNumber      int
+	ContentLength   int
+	ContentSha1     string
+	UploadTimestamp time.Time
+	StatusCode      int
 }
 
 type UploadFileResponse struct {
@@ -33,10 +66,24 @@ type UploadFileResponse struct {
 	StatusCode      int
 }
 
-func UploadFile(filepath, encryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, bucketID string) UploadFileResponse {
+func UploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
+	fileInfo, err := os.Stat(filePath)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if fileInfo.Size() >= authorizationInfo.RecommendedPartSize {
+		return uploadLargeFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
+	}
+
+	return uploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
+}
+
+func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
 	getUploadResponse := getUploadURL(authorizationInfo, bucketID)
 
-	return performUpload(filepath, encryptionPassphrase, getUploadResponse)
+	return performUpload(filePath, encryptionPassphrase, getUploadResponse)
 }
 
 func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucketID string) getUploadURLResponse {
@@ -59,8 +106,8 @@ func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucket
 	return getUploadURLResponse
 }
 
-func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse getUploadURLResponse) UploadFileResponse {
-	encryptedFileContents := encryption.EncryptFile(filepath, encryptionPassphrase)
+func performUpload(filePath, encryptionPassphrase string, getUploadURLResponse getUploadURLResponse) UploadFileResponse {
+	encryptedFileContents := encryption.EncryptFile(filePath, encryptionPassphrase)
 
 	hash := sha1.New()
 
@@ -68,10 +115,10 @@ func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse g
 
 	fileSha1 := hex.EncodeToString(hash.Sum(nil))
 
-	uploadFileName := filepath
+	uploadFileName := filePath
 
-	if strings.HasPrefix(filepath, "/") || strings.HasPrefix(filepath, "\\") {
-		uploadFileName = filepath[1:]
+	if strings.HasPrefix(filePath, "/") || strings.HasPrefix(filePath, "\\") {
+		uploadFileName = filePath[1:]
 	}
 
 	headers := map[string]string{
@@ -92,4 +139,169 @@ func performUpload(filepath, encryptionPassphrase string, getUploadURLResponse g
 	}
 
 	return uploadFileResponse
+}
+
+func uploadLargeFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
+	startLargeFileResponse := startLargeFile(filePath, bucketID, authorizationInfo)
+
+	if startLargeFileResponse.StatusCode != 200 {
+		log.Printf("Start upload failed. See above for error message. Aborting upload attempt for %s\n", filePath)
+
+		return UploadFileResponse{StatusCode: startLargeFileResponse.StatusCode}
+	}
+
+	encryptedFileContent := encryption.EncryptFile(filePath, encryptionPassphrase)
+
+	var fileParts [][]byte
+
+	numberOfParts := int64(math.Ceil(float64(len(encryptedFileContent)) / float64(authorizationInfo.RecommendedPartSize)))
+
+	for i := int64(0); i < numberOfParts; i++ {
+		var partContent []byte
+
+		if i+1 == numberOfParts {
+			partContent = encryptedFileContent[i*authorizationInfo.RecommendedPartSize:]
+		} else {
+			partContent = encryptedFileContent[i*authorizationInfo.RecommendedPartSize : (i+1)*authorizationInfo.RecommendedPartSize]
+		}
+
+		fileParts = append(fileParts, partContent)
+	}
+
+	var wg sync.WaitGroup
+	var partSha1s = make([]string, numberOfParts)
+
+	for index, part := range fileParts {
+		wg.Add(1)
+
+		go performPartUpload(startLargeFileResponse.FileID, authorizationInfo, index+1, part, &partSha1s, &wg)
+	}
+
+	wg.Wait()
+	return finishLargeFile(startLargeFileResponse.FileID, authorizationInfo, partSha1s)
+}
+
+func startLargeFile(fileName, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) startLargeFileResponse {
+	url := authorizationInfo.APIURL + "/b2api/v2/b2_start_large_file"
+
+	headers := map[string]string{
+		"Authorization": authorizationInfo.AuthorizationToken,
+	}
+
+	uploadFileName := fileName
+
+	if strings.HasPrefix(fileName, "/") || strings.HasPrefix(fileName, "\\") {
+		uploadFileName = fileName[1:]
+	}
+
+	body, _ := json.Marshal(map[string]string{
+		"fileName":    uploadFileName,
+		"bucketId":    bucketID,
+		"contentType": "b2/x-auto",
+	})
+
+	response := httprequestbuilder.ExecutePost(url, body, headers)
+
+	startLargeFileResponse := startLargeFileResponse{StatusCode: response.StatusCode}
+
+	if startLargeFileResponse.StatusCode != 200 {
+		log.Printf("Start upload of file %s failed with error code %d. Error: %s\n", fileName, response.StatusCode, string(response.BodyContent))
+	} else {
+		json.Unmarshal(response.BodyContent, &startLargeFileResponse)
+	}
+
+	return startLargeFileResponse
+}
+
+func performPartUpload(fileID string, authorizationInfo accountauthorization.AuthorizeAccountResponse, partNumber int, partContents []byte, partSha1s *[]string, wg *sync.WaitGroup) {
+	getUploadPartURLResponse := getUploadPartURL(fileID, authorizationInfo)
+
+	uploadResponse := uploadPart(getUploadPartURLResponse.UploadURL, getUploadPartURLResponse.AuthorizationToken, partNumber, partContents)
+
+	(*partSha1s)[partNumber-1] = uploadResponse.ContentSha1
+
+	(*wg).Done()
+}
+
+func getUploadPartURL(fileID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) getUploadPartURLResponse {
+	url := authorizationInfo.APIURL + "/b2api/v2/b2_get_upload_part_url"
+
+	headers := map[string]string{"Authorization": authorizationInfo.AuthorizationToken}
+
+	body, _ := json.Marshal(map[string]string{
+		"fileId": fileID,
+	})
+
+	response := httprequestbuilder.ExecutePost(url, body, headers)
+
+	getUploadPartURLResponse := getUploadPartURLResponse{StatusCode: response.StatusCode}
+
+	if getUploadPartURLResponse.StatusCode != 200 {
+		log.Printf("GetUploadPartUrl failed with status code %d. Error: %s\n", response.StatusCode, string(response.BodyContent))
+	} else {
+		json.Unmarshal(response.BodyContent, &getUploadPartURLResponse)
+	}
+
+	return getUploadPartURLResponse
+}
+
+func uploadPart(uploadPartURL, uploadPartURLAuthToken string, partNumber int, partContent []byte) uploadPartResponse {
+	hash := sha1.New()
+
+	hash.Write(partContent)
+
+	partSha1 := hex.EncodeToString(hash.Sum(nil))
+
+	headers := map[string]string{
+		"Authorization":     uploadPartURLAuthToken,
+		"X-Bz-Part-Number":  strconv.FormatInt(int64(partNumber), 10),
+		"X-Bz-Content-Sha1": partSha1,
+		"Content-Length":    strconv.FormatInt(int64(len(partContent)), 10),
+	}
+
+	response := httprequestbuilder.ExecutePost(uploadPartURL, partContent, headers)
+
+	uploadPartResponse := uploadPartResponse{StatusCode: response.StatusCode}
+
+	if uploadPartResponse.StatusCode != 200 {
+		log.Printf("UploadPart failed with status code %d. Error: %s\n", uploadPartResponse.StatusCode, string(response.BodyContent))
+	} else {
+		json.Unmarshal(response.BodyContent, &uploadPartResponse)
+	}
+
+	return uploadPartResponse
+}
+
+func finishLargeFile(fileID string, authorizationInfo accountauthorization.AuthorizeAccountResponse, partSha1s []string) UploadFileResponse {
+	url := authorizationInfo.APIURL + "/b2api/v2/b2_finish_large_file"
+
+	headers := map[string]string{"Authorization": authorizationInfo.AuthorizationToken}
+
+	type finishLargeFileBody struct {
+		FileID        string   `json:"fileId"`
+		PartSha1Array []string `json:"partSha1Array"`
+	}
+
+	bodyStruct := finishLargeFileBody{
+		FileID:        fileID,
+		PartSha1Array: partSha1s,
+	}
+
+	body, err := json.Marshal(bodyStruct)
+
+	if err != nil {
+		log.Println("Failed to marshal the finishLargeFile body: ", err)
+	}
+
+	response := httprequestbuilder.ExecutePost(url, body, headers)
+
+	finishLargeFileResponse := UploadFileResponse{StatusCode: response.StatusCode}
+
+	if response.StatusCode != 200 {
+		log.Printf("Call to FinishLargeFile failed with code %d. Error: %s\n", response.StatusCode, string(response.BodyContent))
+	} else {
+		json.Unmarshal(response.BodyContent, &finishLargeFileResponse)
+	}
+
+	return finishLargeFileResponse
 }
