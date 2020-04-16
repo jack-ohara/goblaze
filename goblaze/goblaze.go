@@ -15,6 +15,28 @@ import (
 	"github.com/jack-ohara/goblaze/goblaze/uploadedfiles"
 )
 
+type FileWriteMode int
+
+const (
+	// Do not overwrite if a file with the same name already exists
+	DoNotOverwrite FileWriteMode = iota
+	// Overwrite the file if the version on backblaze is more recent than the existing version
+	OverwriteOldFiles
+	// Overwrite every file on disk with its respective file from backblaze
+	AlwaysOverwrite
+)
+
+// DownloadOptions defines the configuration of the download you want to perform
+type DownloadOptions struct {
+	// DirectoryName is the path of the directory to download from backblaze
+	DirectoryName string
+	// TargetDirectory is the location that the downloaded files will be written to, with respect to the WriteMode.
+	// The downloaded files will be written to a directory with the same name as the last directory in the DirectoryName
+	TargetDirectory string
+	// WriteMode sets the preference of how the downloaded files will be written to disk
+	WriteMode FileWriteMode
+}
+
 func UploadDirectory(directoryPath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
 	uploadedFiles := uploadedfiles.GetUploadedFiles()
 	lock := sync.RWMutex{}
@@ -31,16 +53,16 @@ func UploadDirectory(directoryPath, encryptionPassphrase, bucketID string, autho
 	uploadedfiles.WriteUploadedFiles(uploadedFiles)
 }
 
-func DownloadDirectory(directoryName, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
+func DownloadDirectory(options DownloadOptions, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
 	uploadedfiles := uploadedfiles.GetUploadedFiles()
 
 	var wg sync.WaitGroup
 
 	for fileName, uploadedFileInfo := range uploadedfiles {
-		if strings.HasPrefix(fileName, directoryName) {
+		if strings.HasPrefix(fileName, options.DirectoryName) {
 			wg.Add(1)
 
-			go downloadFileAndWriteToDisk(uploadedFileInfo.FileID, decryptionPassphrase, authorizationInfo, uploadedFileInfo.LargeFile, &wg)
+			go downloadFileAndWriteToDisk(uploadedFileInfo.FileID, decryptionPassphrase, authorizationInfo, uploadedFileInfo.LargeFile, &wg, &options)
 		}
 	}
 
@@ -104,19 +126,27 @@ func writeUploadedFileToMap(lock *sync.RWMutex, uploadedFiles *uploadedfiles.Upl
 	(*uploadedFiles)[filePath] = uploadedfiles.UploadedFileInfo{LastUploadedTime: time.Now(), FileID: fileID}
 }
 
-func downloadFileAndWriteToDisk(fileID, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, largeFile bool, wg *sync.WaitGroup) {
+func downloadFileAndWriteToDisk(fileID, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, largeFile bool, wg *sync.WaitGroup, options *DownloadOptions) {
 	downloadResponse := filedownloader.DownloadFileById(fileID, decryptionPassphrase, authorizationInfo, largeFile)
 
-	fileName := "/" + downloadResponse.FileName
-
 	if downloadResponse.StatusCode != 200 || len(downloadResponse.FileContent) == 0 {
-		log.Printf("Something went wrong with the download for file %s. Aborting the write to disk\n", fileName)
+		log.Printf("Something went wrong with the download for file with ID %s. Aborting the write to disk\n", fileID)
 
 		return
 	}
 
-	lastSlashIndex := strings.LastIndexByte(fileName, byte('/'))
-	containingDirectory := fileName[:lastSlashIndex]
+	var fileNamePrefix string
+
+	if strings.HasPrefix(options.DirectoryName, "/") || strings.HasPrefix(options.DirectoryName, "\\") {
+		fileNamePrefix = options.DirectoryName[1:]
+	} else {
+		fileNamePrefix = options.DirectoryName
+	}
+
+	targetFile := path.Join(options.TargetDirectory, strings.TrimPrefix(downloadResponse.FileName, fileNamePrefix))
+
+	lastSlashIndex := strings.LastIndexByte(targetFile, byte('/'))
+	containingDirectory := targetFile[:lastSlashIndex]
 
 	err := os.MkdirAll(containingDirectory, os.ModePerm)
 
@@ -124,7 +154,7 @@ func downloadFileAndWriteToDisk(fileID, decryptionPassphrase string, authorizati
 		log.Println(err)
 	}
 
-	err = ioutil.WriteFile(fileName, downloadResponse.FileContent, os.ModePerm)
+	err = ioutil.WriteFile(targetFile, downloadResponse.FileContent, os.ModePerm)
 
 	if err != nil {
 		log.Println(err)
