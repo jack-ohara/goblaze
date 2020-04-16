@@ -5,30 +5,46 @@ import (
 	"log"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/jack-ohara/goblaze/goblaze/accountauthorization"
+	"github.com/jack-ohara/goblaze/goblaze/filedownloader"
 	"github.com/jack-ohara/goblaze/goblaze/fileuploader"
 	"github.com/jack-ohara/goblaze/goblaze/uploadedfiles"
 )
 
-func UploadDirectories(directories []string, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
+func UploadDirectories(directoryPath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
 	uploadedFiles := uploadedfiles.GetUploadedFiles()
 	lock := sync.RWMutex{}
 
 	var wg sync.WaitGroup
 
-	for _, directoryPath := range directories {
-		for _, filePath := range getFilePaths(directoryPath, uploadedFiles) {
-			wg.Add(1)
+	for _, filePath := range getFilePaths(directoryPath, uploadedFiles) {
+		wg.Add(1)
 
-			go uploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo, &lock, &uploadedFiles, &wg)
-		}
+		go uploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo, &lock, &uploadedFiles, &wg)
 	}
 
 	wg.Wait()
 	uploadedfiles.WriteUploadedFiles(uploadedFiles)
+}
+
+func DownloadDirectory(directoryName, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
+	uploadedfiles := uploadedfiles.GetUploadedFiles()
+
+	var wg sync.WaitGroup
+
+	for fileName, uploadedFileInfo := range uploadedfiles {
+		if strings.HasPrefix(fileName, directoryName) {
+			wg.Add(1)
+
+			go downloadFileAndWriteToDisk(uploadedFileInfo.FileID, decryptionPassphrase, authorizationInfo, uploadedFileInfo.LargeFile, &wg)
+		}
+	}
+
+	wg.Wait()
 }
 
 func getFilePaths(directoryPath string, uploadedFiles uploadedfiles.UploadedFiles) []string {
@@ -86,4 +102,33 @@ func writeUploadedFileToMap(lock *sync.RWMutex, uploadedFiles *uploadedfiles.Upl
 	defer (*lock).Unlock()
 	log.Printf("Adding %s to uploadedFiles. FileId: %s\n", filePath, fileID)
 	(*uploadedFiles)[filePath] = uploadedfiles.UploadedFileInfo{LastUploadedTime: time.Now(), FileID: fileID}
+}
+
+func downloadFileAndWriteToDisk(fileID, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, largeFile bool, wg *sync.WaitGroup) {
+	downloadResponse := filedownloader.DownloadFileById(fileID, decryptionPassphrase, authorizationInfo, largeFile)
+
+	fileName := "/" + downloadResponse.FileName
+
+	if downloadResponse.StatusCode != 200 || len(downloadResponse.FileContent) == 0 {
+		log.Printf("Something went wrong with the download for file %s. Aborting the write to disk\n", fileName)
+
+		return
+	}
+
+	lastSlashIndex := strings.LastIndexByte(fileName, byte('/'))
+	containingDirectory := fileName[:lastSlashIndex]
+
+	err := os.MkdirAll(containingDirectory, os.ModePerm)
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	err = ioutil.WriteFile(fileName, downloadResponse.FileContent, os.ModePerm)
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	(*wg).Done()
 }
