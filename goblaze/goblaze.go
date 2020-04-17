@@ -59,7 +59,7 @@ func DownloadDirectory(options DownloadOptions, decryptionPassphrase string, aut
 	var wg sync.WaitGroup
 
 	for fileName, uploadedFileInfo := range uploadedfiles {
-		if strings.HasPrefix(fileName, options.DirectoryName) {
+		if strings.HasPrefix(fileName, options.DirectoryName) && fileShouldBeDownloaded(fileName, &uploadedFileInfo, &options) {
 			wg.Add(1)
 
 			go downloadFileAndWriteToDisk(uploadedFileInfo.FileID, decryptionPassphrase, authorizationInfo, uploadedFileInfo.LargeFile, &wg, &options)
@@ -126,6 +126,33 @@ func writeUploadedFileToMap(lock *sync.RWMutex, uploadedFiles *uploadedfiles.Upl
 	(*uploadedFiles)[filePath] = uploadedfiles.UploadedFileInfo{LastUploadedTime: time.Now(), FileID: fileID}
 }
 
+func fileShouldBeDownloaded(fileName string, uploadedFileInfo *uploadedfiles.UploadedFileInfo, options *DownloadOptions) bool {
+	switch options.WriteMode {
+	case AlwaysOverwrite:
+		return true
+	case OverwriteOldFiles:
+		targetFile := getTargetFileName(fileName, options.TargetDirectory, options.DirectoryName)
+
+		fileInfo, err := os.Stat(targetFile)
+
+		if os.IsNotExist(err) {
+			return true
+		}
+
+		return uploadedFileInfo.LastUploadedTime.After(fileInfo.ModTime().Local())
+	case DoNotOverwrite:
+		targetFile := getTargetFileName(fileName, options.TargetDirectory, options.DirectoryName)
+
+		_, err := os.Stat(targetFile)
+
+		return os.IsNotExist(err)
+	}
+
+	log.Fatalf("The supplied WriteMode option '%d' is not recognised", options.WriteMode)
+
+	return false
+}
+
 func downloadFileAndWriteToDisk(fileID, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, largeFile bool, wg *sync.WaitGroup, options *DownloadOptions) {
 	downloadResponse := filedownloader.DownloadFileById(fileID, decryptionPassphrase, authorizationInfo, largeFile)
 
@@ -135,15 +162,7 @@ func downloadFileAndWriteToDisk(fileID, decryptionPassphrase string, authorizati
 		return
 	}
 
-	var fileNamePrefix string
-
-	if strings.HasPrefix(options.DirectoryName, "/") || strings.HasPrefix(options.DirectoryName, "\\") {
-		fileNamePrefix = options.DirectoryName[1:]
-	} else {
-		fileNamePrefix = options.DirectoryName
-	}
-
-	targetFile := path.Join(options.TargetDirectory, strings.TrimPrefix(downloadResponse.FileName, fileNamePrefix))
+	targetFile := getTargetFileName(downloadResponse.FileName, options.TargetDirectory, options.DirectoryName)
 
 	lastSlashIndex := strings.LastIndexByte(targetFile, byte('/'))
 	containingDirectory := targetFile[:lastSlashIndex]
@@ -161,4 +180,18 @@ func downloadFileAndWriteToDisk(fileID, decryptionPassphrase string, authorizati
 	}
 
 	(*wg).Done()
+}
+
+func getTargetFileName(uploadedFileName, targetDirectory, directoryToDownload string) string {
+	var fileNamePrefix string
+
+	directoryToDownload = strings.TrimPrefix(directoryToDownload, "/")
+	directoryToDownload = strings.TrimPrefix(directoryToDownload, "\\")
+
+	uploadedFileName = strings.TrimPrefix(uploadedFileName, "/")
+	uploadedFileName = strings.TrimPrefix(uploadedFileName, "\\")
+
+	uploadedFileName = strings.TrimPrefix(uploadedFileName, directoryToDownload)
+
+	return path.Join(targetDirectory, strings.TrimPrefix(uploadedFileName, fileNamePrefix))
 }
