@@ -113,7 +113,7 @@ func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationIn
 	if uploadResponse.StatusCode == 200 {
 		writeUploadedFileToMap(lock, uploadedFiles, filePath, uploadResponse.FileID)
 	} else {
-		log.Printf("The uploading of the file %s returned a status code of %d", filePath, uploadResponse.StatusCode)
+		log.Printf("The uploading of the file %s returned a status code of %d\n", filePath, uploadResponse.StatusCode)
 	}
 
 	wg.Done()
@@ -183,15 +183,13 @@ func downloadFileAndWriteToDisk(fileID, decryptionPassphrase string, authorizati
 }
 
 func getTargetFileName(uploadedFileName, targetDirectory, directoryToDownload string) string {
-	var fileNamePrefix string
-
 	directoryToDownload = strings.TrimPrefix(directoryToDownload, "/")
 	directoryToDownload = strings.TrimPrefix(directoryToDownload, "\\")
 
 	uploadedFileName = strings.TrimPrefix(uploadedFileName, "/")
 	uploadedFileName = strings.TrimPrefix(uploadedFileName, "\\")
 
-	uploadedFileName = strings.TrimPrefix(uploadedFileName, directoryToDownload)
+	uploadedFileName = strings.TrimPrefix(uploadedFileName, directoryToDownload[:strings.LastIndex(directoryToDownload, string(os.PathSeparator))])
 
-	return path.Join(targetDirectory, strings.TrimPrefix(uploadedFileName, fileNamePrefix))
+	return path.Join(targetDirectory, uploadedFileName)
 }

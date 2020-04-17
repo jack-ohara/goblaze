@@ -134,9 +134,11 @@ func performUpload(filePath, encryptionPassphrase string, getUploadURLResponse g
 	uploadFileResponse := UploadFileResponse{StatusCode: response.StatusCode, LargeFile: false}
 
 	if uploadFileResponse.StatusCode != 200 {
-		log.Printf("Upload file failed with status code %d. Error: %s", uploadFileResponse.StatusCode, string(response.BodyContent))
+		log.Printf("Upload file failed with status code %d. Error: %s\n", uploadFileResponse.StatusCode, string(response.BodyContent))
 	} else {
 		json.Unmarshal(response.BodyContent, &uploadFileResponse)
+
+		log.Println("Successfully uploaded ", filePath)
 	}
 
 	return uploadFileResponse
