@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/jack-ohara/goblaze/httprequestbuilder"
 	"log"
 	"os"
 
@@ -10,6 +9,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type configurationValues struct {
+	EncryptionPassphrase string
+	KeyID                string
+	ApplicationKey       string
+	BucketID             string
+}
+
 func main() {
 	err := godotenv.Load()
 
@@ -17,17 +23,26 @@ func main() {
 		log.Fatal(err)
 	}
 
-	encryptionPassphrase := os.Getenv("ENCRYPTION_PASSPHRASE")
+	configValues := getEnvironmentVariables()
 
-	authorizationInfo := accountauthorization.GetAccountAuthorization(os.Getenv("KEY_ID"), os.Getenv("APPLICATION_ID"))
+	authorizationInfo := accountauthorization.GetAccountAuthorization(configValues.KeyID, configValues.ApplicationKey)
 
-	goblaze.UploadDirectories(os.Args[1:], encryptionPassphrase, os.Getenv("BUCKET_ID"), authorizationInfo)
+	goblaze.UploadDirectory(os.Args[1], configValues.EncryptionPassphrase, configValues.BucketID, authorizationInfo)
 
-	httprequestbuilder.ExecutePost(authorizationInfo.APIURL + "/b2api/v2/b2_list_file_names", []byte("{\"bucketId\": \""+os.Getenv("BUCKET_ID")+"\"}"), map[string]string{"Authorization": authorizationInfo.AuthorizationToken})
+	downloadOptions := goblaze.DownloadOptions{
+		DirectoryName:   "/home/jack/Documents/Backup-Test/",
+		TargetDirectory: "/home/jack/Backup-Downloaded",
+		WriteMode:       goblaze.OverwriteOldFiles,
+	}
 
-	// fileuploader.UploadFile("/home/jack/test.txt", encryptionPassphrase, authorizationInfo, os.Getenv("BUCKET_ID"))
+	goblaze.DownloadDirectory(downloadOptions, configValues.EncryptionPassphrase, authorizationInfo)
+}
 
-	// downloadResponse := filedownloader.DownloadFile("/home/jack/Documents/Backup-Test/file1.txt", authorizationInfo, encryptionPassphrase)
-
-	// fmt.Println(string(downloadResponse.FileContent))
+func getEnvironmentVariables() configurationValues {
+	return configurationValues{
+		EncryptionPassphrase: os.Getenv("ENCRYPTION_PASSPHRASE"),
+		KeyID:                os.Getenv("KEY_ID"),
+		ApplicationKey:       os.Getenv("APPLICATION_KEY"),
+		BucketID:             os.Getenv("BUCKET_ID"),
+	}
 }
