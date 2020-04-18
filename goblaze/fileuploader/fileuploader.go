@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"math"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -121,6 +122,8 @@ func performUpload(filePath, encryptionPassphrase string, getUploadURLResponse g
 	if strings.HasPrefix(filePath, "/") || strings.HasPrefix(filePath, "\\") {
 		uploadFileName = filePath[1:]
 	}
+
+	uploadFileName = url.QueryEscape(uploadFileName)
 
 	headers := map[string]string{
 		"Authorization":     getUploadURLResponse.AuthorizationToken,

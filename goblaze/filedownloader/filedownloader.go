@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"log"
+	"net/url"
 	"strings"
 
 	"github.com/jack-ohara/goblaze/fileencryption/decryption"
@@ -30,13 +31,13 @@ func DownloadFileByName(filename, decryptionPassphrase string, authorizationInfo
 }
 
 func DownloadFileById(fileID, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse, largeFile bool) DownloadFileResponse {
-	url := authorizationInfo.DownloadURL + "/b2api/v2/b2_download_file_by_id?fileId=" + fileID
+	downloadURL := authorizationInfo.DownloadURL + "/b2api/v2/b2_download_file_by_id?fileId=" + fileID
 
 	headers := map[string]string{
 		"Authorization": authorizationInfo.AuthorizationToken,
 	}
 
-	response := httprequestbuilder.ExecuteGet(url, headers)
+	response := httprequestbuilder.ExecuteGet(downloadURL, headers)
 
 	downloadFileResponse := DownloadFileResponse{StatusCode: response.StatusCode}
 
@@ -64,8 +65,17 @@ func DownloadFileById(fileID, decryptionPassphrase string, authorizationInfo acc
 		} else {
 			fileContent := decryption.DecryptData(response.BodyContent, decryptionPassphrase)
 
+			fileName := response.Headers["X-Bz-File-Name"][0]
+			decoded, err := url.QueryUnescape(fileName)
+
+			if err != nil {
+				log.Printf("Error decoding the downloaded filename %s for file with ID %s\n", fileName, fileID)
+
+				return downloadFileResponse
+			}
+
 			downloadFileResponse.FileID = response.Headers["X-Bz-File-Id"][0]
-			downloadFileResponse.FileName = response.Headers["X-Bz-File-Name"][0]
+			downloadFileResponse.FileName = decoded
 			downloadFileResponse.FileContent = fileContent
 		}
 	}
