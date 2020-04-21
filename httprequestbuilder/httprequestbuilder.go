@@ -16,11 +16,15 @@ type HttpResponse struct {
 func ExecuteGet(url string, headers map[string]string) HttpResponse {
 	req, _ := http.NewRequest("GET", url, nil)
 
+	req.Close = true
+
 	return executeRequest(req, headers)
 }
 
 func ExecutePost(url string, body []byte, headers map[string]string) HttpResponse {
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
+
+	req.Close = true
 
 	return executeRequest(req, headers)
 }
@@ -40,9 +44,9 @@ func executeRequest(request *http.Request, headers map[string]string) HttpRespon
 		log.Fatal(err)
 	}
 
-	defer resp.Body.Close()
-
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+
+	resp.Body.Close()
 
 	httpResponse := HttpResponse{
 		BodyContent: bodyBytes,

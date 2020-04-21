@@ -42,11 +42,27 @@ func UploadDirectory(directoryPath, encryptionPassphrase, bucketID string, autho
 	lock := sync.RWMutex{}
 
 	var wg sync.WaitGroup
+	allFiles := getFilePaths(directoryPath, uploadedFiles)
 
-	for _, filePath := range getFilePaths(directoryPath, uploadedFiles) {
-		wg.Add(1)
+	numberOfRequests := 0
 
-		go uploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo, &lock, &uploadedFiles, &wg)
+	const maxNumberOfRequests = 15
+
+	for i := 0; i < len(allFiles); {
+		if numberOfRequests <= maxNumberOfRequests {
+			wg.Add(1)
+
+			onCompletion := func() {
+				wg.Done()
+
+				numberOfRequests--
+			}
+
+			go uploadFile(allFiles[i], encryptionPassphrase, bucketID, authorizationInfo, &lock, &uploadedFiles, &onCompletion)
+
+			numberOfRequests++
+			i++
+		}
 	}
 
 	wg.Wait()
@@ -107,23 +123,31 @@ func fileShouldBeUploaded(filePath string, uploadedFiles uploadedfiles.UploadedF
 	return true
 }
 
-func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse, lock *sync.RWMutex, uploadedFiles *uploadedfiles.UploadedFiles, wg *sync.WaitGroup) {
+func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse, lock *sync.RWMutex, uploadedFiles *uploadedfiles.UploadedFiles, onCompletionFunc *func()) {
+	log.Println("Starting upload of file ", filePath)
+
 	uploadResponse := fileuploader.UploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
 
 	if uploadResponse.StatusCode == 200 {
+		log.Println("Successfully uploaded file ", filePath)
+
 		writeUploadedFileToMap(lock, uploadedFiles, filePath, uploadResponse.FileID)
 	} else {
 		log.Printf("The uploading of the file %s returned a status code of %d\n", filePath, uploadResponse.StatusCode)
 	}
 
-	wg.Done()
+	(*onCompletionFunc)()
 }
 
 func writeUploadedFileToMap(lock *sync.RWMutex, uploadedFiles *uploadedfiles.UploadedFiles, filePath, fileID string) {
 	(*lock).Lock()
 	defer (*lock).Unlock()
+
 	log.Printf("Adding %s to uploadedFiles. FileId: %s\n", filePath, fileID)
+
 	(*uploadedFiles)[filePath] = uploadedfiles.UploadedFileInfo{LastUploadedTime: time.Now(), FileID: fileID}
+
+	uploadedfiles.WriteUploadedFiles(*uploadedFiles)
 }
 
 func fileShouldBeDownloaded(fileName string, uploadedFileInfo *uploadedfiles.UploadedFileInfo, options *DownloadOptions) bool {

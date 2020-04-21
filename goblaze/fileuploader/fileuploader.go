@@ -68,6 +68,8 @@ type UploadFileResponse struct {
 	LargeFile       bool
 }
 
+type uploadFunction func(filePath, encryptionPassphrase, bucketID string, authInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse
+
 func UploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
 	fileInfo, err := os.Stat(filePath)
 
@@ -75,11 +77,25 @@ func UploadFile(filePath, encryptionPassphrase, bucketID string, authorizationIn
 		log.Fatal(err)
 	}
 
+	var uploadFunc uploadFunction
+
 	if fileInfo.Size() >= authorizationInfo.RecommendedPartSize {
-		return uploadLargeFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
+		uploadFunc = uploadLargeFile
+	} else {
+		uploadFunc = uploadFile
 	}
 
-	return uploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
+	var response UploadFileResponse
+
+	for i := 0; i < 5; i++ {
+		response = uploadFunc(filePath, encryptionPassphrase, bucketID, authorizationInfo)
+
+		if response.StatusCode != 401 && response.StatusCode != 503 {
+			break
+		}
+	}
+
+	return response
 }
 
 func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
@@ -103,7 +119,11 @@ func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucket
 
 	getUploadURLResponse := getUploadURLResponse{StatusCode: response.StatusCode}
 
-	json.Unmarshal(response.BodyContent, &getUploadURLResponse)
+	if getUploadURLResponse.StatusCode != 200 {
+		log.Printf("Get upload URL failed with status code %d. Error: %s\n", getUploadURLResponse.StatusCode, string(response.BodyContent))
+	} else {
+		json.Unmarshal(response.BodyContent, &getUploadURLResponse)
+	}
 
 	return getUploadURLResponse
 }
@@ -140,8 +160,6 @@ func performUpload(filePath, encryptionPassphrase string, getUploadURLResponse g
 		log.Printf("Upload file failed with status code %d. Error: %s\n", uploadFileResponse.StatusCode, string(response.BodyContent))
 	} else {
 		json.Unmarshal(response.BodyContent, &uploadFileResponse)
-
-		log.Println("Successfully uploaded ", filePath)
 	}
 
 	return uploadFileResponse
