@@ -42,7 +42,7 @@ func UploadDirectory(directoryPath, encryptionPassphrase, bucketID string, autho
 	lock := sync.RWMutex{}
 
 	var wg sync.WaitGroup
-	allFiles := getFilePaths(directoryPath, uploadedFiles)
+	allFiles := getFilePaths(strings.ReplaceAll(directoryPath, "\\", "/"), uploadedFiles)
 
 	numberOfRequests := 0
 
