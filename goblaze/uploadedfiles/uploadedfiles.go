@@ -5,8 +5,9 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"time"
+
+	"github.com/jack-ohara/goblaze/goblaze/configuration"
 )
 
 type UploadedFileInfo struct {
@@ -18,12 +19,8 @@ type UploadedFileInfo struct {
 type UploadedFiles map[string]UploadedFileInfo
 
 func GetUploadedFiles() UploadedFiles {
-	if _, err := os.Stat(getConfigDirectory()); os.IsNotExist(err) {
-		os.MkdirAll(getConfigDirectory(), os.ModePerm)
-	}
-
-	if _, err := os.Stat(getConfigFilePath()); os.IsNotExist(err) {
-		file, err := os.Create(getConfigFilePath())
+	if _, err := os.Stat(configuration.GetUploadedFilesPath()); os.IsNotExist(err) {
+		file, err := os.Create(configuration.GetUploadedFilesPath())
 
 		if err != nil {
 			log.Fatal(err)
@@ -32,7 +29,7 @@ func GetUploadedFiles() UploadedFiles {
 		file.Close()
 	}
 
-	fileContents, err := ioutil.ReadFile(getConfigFilePath())
+	fileContents, err := ioutil.ReadFile(configuration.GetUploadedFilesPath())
 
 	if err != nil {
 		log.Fatal(err)
@@ -51,23 +48,9 @@ func WriteUploadedFiles(uploadedFiles UploadedFiles) {
 		log.Fatal(err)
 	}
 
-	err = ioutil.WriteFile(getConfigFilePath(), jsonContent, os.ModePerm)
+	err = ioutil.WriteFile(configuration.GetUploadedFilesPath(), jsonContent, os.ModePerm)
 
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func getConfigDirectory() string {
-	userHomeDir, err := os.UserHomeDir()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return path.Join(userHomeDir, ".goblaze")
-}
-
-func getConfigFilePath() string {
-	return path.Join(getConfigDirectory(), "uploadedFiles.json")
 }

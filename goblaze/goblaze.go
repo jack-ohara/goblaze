@@ -42,7 +42,7 @@ func UploadDirectory(directoryPath, encryptionPassphrase, bucketID string, autho
 	lock := sync.RWMutex{}
 
 	var wg sync.WaitGroup
-	allFiles := getFilePaths(directoryPath, uploadedFiles)
+	allFiles := getFilePaths(strings.ReplaceAll(directoryPath, "\\", "/"), uploadedFiles)
 
 	numberOfRequests := 0
 
@@ -131,7 +131,7 @@ func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationIn
 	if uploadResponse.StatusCode == 200 {
 		log.Println("Successfully uploaded file ", filePath)
 
-		writeUploadedFileToMap(lock, uploadedFiles, filePath, uploadResponse.FileID)
+		writeUploadedFileToMap(lock, uploadedFiles, filePath, uploadResponse.FileID, uploadResponse.LargeFile)
 	} else {
 		log.Printf("The uploading of the file %s returned a status code of %d\n", filePath, uploadResponse.StatusCode)
 	}
@@ -139,13 +139,13 @@ func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationIn
 	(*onCompletionFunc)()
 }
 
-func writeUploadedFileToMap(lock *sync.RWMutex, uploadedFiles *uploadedfiles.UploadedFiles, filePath, fileID string) {
+func writeUploadedFileToMap(lock *sync.RWMutex, uploadedFiles *uploadedfiles.UploadedFiles, filePath, fileID string, largeFile bool) {
 	(*lock).Lock()
 	defer (*lock).Unlock()
 
 	log.Printf("Adding %s to uploadedFiles. FileId: %s\n", filePath, fileID)
 
-	(*uploadedFiles)[filePath] = uploadedfiles.UploadedFileInfo{LastUploadedTime: time.Now(), FileID: fileID}
+	(*uploadedFiles)[filePath] = uploadedfiles.UploadedFileInfo{LastUploadedTime: time.Now(), FileID: fileID, LargeFile: largeFile}
 
 	uploadedfiles.WriteUploadedFiles(*uploadedFiles)
 }

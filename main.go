@@ -7,24 +7,11 @@ import (
 
 	"github.com/jack-ohara/goblaze/goblaze"
 	"github.com/jack-ohara/goblaze/goblaze/accountauthorization"
-	"github.com/joho/godotenv"
+	"github.com/jack-ohara/goblaze/goblaze/configuration"
 )
 
-type configurationValues struct {
-	EncryptionPassphrase string
-	KeyID                string
-	ApplicationKey       string
-	BucketID             string
-}
-
 func main() {
-	err := godotenv.Load()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	configValues := getEnvironmentVariables()
+	configCommand := flag.NewFlagSet("config", flag.ExitOnError)
 
 	uploadCommand := flag.NewFlagSet("upload", flag.ExitOnError)
 	uploadDirectory := uploadCommand.String("dir", "", "Identifies the directory to upload")
@@ -35,12 +22,22 @@ func main() {
 	downloadWriteMode := downloadCommand.Int("write-mode", 1, "Value of 0: Does not overwrite the file if it already exists\nValue of 1: Overwrites existing files if the downloaded file is more recent\nValue of 2: Overwrites any existing files")
 
 	switch os.Args[1] {
+	case "config":
+		configCommand.Parse(os.Args[2:])
+
+		if len(configCommand.Args()) > 0 {
+			log.Fatalln("Unexpected arguments to goblaze config: ", uploadCommand.Args())
+		}
+
+		configuration.SetupConfigFile()
 	case "upload":
 		uploadCommand.Parse(os.Args[2:])
 
 		if len(uploadCommand.Args()) > 0 {
 			log.Fatalln("Unexpected arguments to goblaze upload: ", uploadCommand.Args())
 		}
+
+		configValues := configuration.GetConfiguration()
 
 		fileInfo, err := os.Stat(*uploadDirectory)
 
@@ -61,6 +58,8 @@ func main() {
 		if len(downloadCommand.Args()) > 0 {
 			log.Fatalln("Unexpected arguments to goblaze download: ", downloadCommand.Args())
 		}
+
+		configValues := configuration.GetConfiguration()
 
 		fileInfo, err := os.Stat(*downloadDestination)
 
@@ -87,14 +86,5 @@ func main() {
 		goblaze.DownloadDirectory(downloadOptions, configValues.EncryptionPassphrase, authorizationInfo)
 	default:
 		log.Fatalln("Expected a subcommand of 'upload' or 'download'")
-	}
-}
-
-func getEnvironmentVariables() configurationValues {
-	return configurationValues{
-		EncryptionPassphrase: os.Getenv("ENCRYPTION_PASSPHRASE"),
-		KeyID:                os.Getenv("KEY_ID"),
-		ApplicationKey:       os.Getenv("APPLICATION_KEY"),
-		BucketID:             os.Getenv("BUCKET_ID"),
 	}
 }
