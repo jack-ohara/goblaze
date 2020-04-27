@@ -4,24 +4,13 @@ import (
 	"flag"
 	"log"
 	"os"
-	"path"
 
 	"github.com/jack-ohara/goblaze/goblaze"
 	"github.com/jack-ohara/goblaze/goblaze/accountauthorization"
 	"github.com/jack-ohara/goblaze/goblaze/configuration"
-	"github.com/joho/godotenv"
 )
 
-type configurationValues struct {
-	EncryptionPassphrase string
-	KeyID                string
-	ApplicationKey       string
-	BucketID             string
-}
-
 func main() {
-	dotenverr := godotenv.Load(path.Join(configuration.GetConfigDirectory(), ".env"))
-
 	configCommand := flag.NewFlagSet("config", flag.ExitOnError)
 
 	uploadCommand := flag.NewFlagSet("upload", flag.ExitOnError)
@@ -48,9 +37,7 @@ func main() {
 			log.Fatalln("Unexpected arguments to goblaze upload: ", uploadCommand.Args())
 		}
 
-		if dotenverr != nil {
-			log.Fatalln("Please run 'goblaze config' first")
-		}
+		configValues := configuration.GetConfiguration()
 
 		fileInfo, err := os.Stat(*uploadDirectory)
 
@@ -62,8 +49,6 @@ func main() {
 			log.Fatalln("Expected 'dir' argument to point to a directory but it is a file: ", *uploadDirectory)
 		}
 
-		configValues := getEnvironmentVariables()
-
 		authorizationInfo := accountauthorization.GetAccountAuthorization(configValues.KeyID, configValues.ApplicationKey)
 
 		goblaze.UploadDirectory(*uploadDirectory, configValues.EncryptionPassphrase, configValues.BucketID, authorizationInfo)
@@ -73,6 +58,8 @@ func main() {
 		if len(downloadCommand.Args()) > 0 {
 			log.Fatalln("Unexpected arguments to goblaze download: ", downloadCommand.Args())
 		}
+
+		configValues := configuration.GetConfiguration()
 
 		fileInfo, err := os.Stat(*downloadDestination)
 
@@ -88,8 +75,6 @@ func main() {
 			log.Fatalln("Invalid value for write-mode: ", *downloadWriteMode)
 		}
 
-		configValues := getEnvironmentVariables()
-
 		authorizationInfo := accountauthorization.GetAccountAuthorization(configValues.KeyID, configValues.ApplicationKey)
 
 		downloadOptions := goblaze.DownloadOptions{
@@ -101,14 +86,5 @@ func main() {
 		goblaze.DownloadDirectory(downloadOptions, configValues.EncryptionPassphrase, authorizationInfo)
 	default:
 		log.Fatalln("Expected a subcommand of 'upload' or 'download'")
-	}
-}
-
-func getEnvironmentVariables() configurationValues {
-	return configurationValues{
-		EncryptionPassphrase: os.Getenv("ENCRYPTION_PASSPHRASE"),
-		KeyID:                os.Getenv("KEY_ID"),
-		ApplicationKey:       os.Getenv("APPLICATION_KEY"),
-		BucketID:             os.Getenv("BUCKET_ID"),
 	}
 }
