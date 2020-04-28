@@ -68,8 +68,6 @@ type UploadFileResponse struct {
 	LargeFile       bool
 }
 
-type uploadFunction func(filePath, encryptionPassphrase, bucketID string, authInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse
-
 func UploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
 	fileInfo, err := os.Stat(filePath)
 
@@ -77,31 +75,27 @@ func UploadFile(filePath, encryptionPassphrase, bucketID string, authorizationIn
 		log.Fatal(err)
 	}
 
-	var uploadFunc uploadFunction
-
 	if fileInfo.Size() >= authorizationInfo.RecommendedPartSize {
-		uploadFunc = uploadLargeFile
-	} else {
-		uploadFunc = uploadFile
+		return uploadLargeFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
 	}
 
-	var response UploadFileResponse
+	return uploadFile(filePath, encryptionPassphrase, bucketID, authorizationInfo)
+}
+
+func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
+	var uploadResponse UploadFileResponse
 
 	for i := 0; i < 5; i++ {
-		response = uploadFunc(filePath, encryptionPassphrase, bucketID, authorizationInfo)
+		getUploadResponse := getUploadURL(authorizationInfo, bucketID)
 
-		if response.StatusCode != 401 && response.StatusCode != 503 {
+		uploadResponse = performUpload(filePath, encryptionPassphrase, getUploadResponse)
+
+		if uploadResponse.StatusCode != 401 && uploadResponse.StatusCode != 503 {
 			break
 		}
 	}
 
-	return response
-}
-
-func uploadFile(filePath, encryptionPassphrase, bucketID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) UploadFileResponse {
-	getUploadResponse := getUploadURL(authorizationInfo, bucketID)
-
-	return performUpload(filePath, encryptionPassphrase, getUploadResponse)
+	return uploadResponse
 }
 
 func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucketID string) getUploadURLResponse {
@@ -201,14 +195,24 @@ func uploadLargeFile(filePath, encryptionPassphrase, bucketID string, authorizat
 	var wg sync.WaitGroup
 	var partSha1s = make([]string, numberOfParts)
 
+	uploadPartResponsesCh := make(chan int, numberOfParts)
+
 	for index, part := range fileParts {
 		wg.Add(1)
 
-		go performPartUpload(startLargeFileResponse.FileID, authorizationInfo, index+1, part, &partSha1s, &wg)
+		go performPartUpload(startLargeFileResponse.FileID, authorizationInfo, index+1, part, &partSha1s, &wg, &uploadPartResponsesCh)
 	}
 
 	wg.Wait()
-	return finishLargeFile(startLargeFileResponse.FileID, authorizationInfo, partSha1s)
+	finishLargeFileResponse := finishLargeFile(startLargeFileResponse.FileID, authorizationInfo, partSha1s)
+
+	for uploadPartResponse := range uploadPartResponsesCh {
+		if uploadPartResponse != 200 {
+			return UploadFileResponse{StatusCode: uploadPartResponse}
+		}
+	}
+
+	return finishLargeFileResponse
 }
 
 func startLargeFile(fileName, bucketID, fileSha1 string, authorizationInfo accountauthorization.AuthorizeAccountResponse) startLargeFileResponse {
@@ -257,14 +261,28 @@ func startLargeFile(fileName, bucketID, fileSha1 string, authorizationInfo accou
 	return startLargeFileResponse
 }
 
-func performPartUpload(fileID string, authorizationInfo accountauthorization.AuthorizeAccountResponse, partNumber int, partContents []byte, partSha1s *[]string, wg *sync.WaitGroup) {
-	getUploadPartURLResponse := getUploadPartURL(fileID, authorizationInfo)
+func performPartUpload(fileID string, authorizationInfo accountauthorization.AuthorizeAccountResponse, partNumber int, partContents []byte, partSha1s *[]string, wg *sync.WaitGroup, responseCodeCh *chan int) {
+	var uploadResponse uploadPartResponse
 
-	uploadResponse := uploadPart(getUploadPartURLResponse.UploadURL, getUploadPartURLResponse.AuthorizationToken, partNumber, partContents)
+	for i := 0; i < 5; i++ {
+		getUploadPartURLResponse := getUploadPartURL(fileID, authorizationInfo)
 
-	(*partSha1s)[partNumber-1] = uploadResponse.ContentSha1
+		uploadResponse = uploadPart(getUploadPartURLResponse.UploadURL, getUploadPartURLResponse.AuthorizationToken, partNumber, partContents)
 
-	(*wg).Done()
+		if uploadResponse.StatusCode != 401 && uploadResponse.StatusCode != 503 {
+			break
+		}
+	}
+
+	(*responseCodeCh) <- uploadResponse.StatusCode
+
+	if uploadResponse.StatusCode == 200 {
+		(*partSha1s)[partNumber-1] = uploadResponse.ContentSha1
+
+		(*wg).Done()
+	} else {
+		log.Printf("Upload part was retried 5 times but a status code of %d was received\n", uploadResponse.StatusCode)
+	}
 }
 
 func getUploadPartURL(fileID string, authorizationInfo accountauthorization.AuthorizeAccountResponse) getUploadPartURLResponse {
