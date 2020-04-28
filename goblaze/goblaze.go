@@ -114,7 +114,8 @@ func fileShouldBeUploaded(filePath string, uploadedFiles uploadedfiles.UploadedF
 		fileInfo, err := os.Stat(filePath)
 
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			return false
 		}
 
 		return uploadedFileInfo.LastUploadedTime.Before(fileInfo.ModTime().Local())
