@@ -38,7 +38,17 @@ func executeRequest(request *http.Request, headers map[string]string) HttpRespon
 
 	client := &http.Client{}
 
-	resp, err := client.Do(request)
+	var resp *http.Response
+	var err error
+
+	for i := 0; i < 5; i++ {
+
+		resp, err = client.Do(request)
+
+		if err == nil {
+			break
+		}
+	}
 
 	if err != nil {
 		log.Fatal(err)
