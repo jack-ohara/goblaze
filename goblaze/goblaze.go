@@ -72,6 +72,9 @@ func UploadDirectory(directoryPath, encryptionPassphrase, bucketID string, autho
 func DownloadDirectory(options DownloadOptions, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
 	uploadedfiles := uploadedfiles.GetUploadedFiles()
 
+	options.DirectoryName = stirngs.ReplaceAll(options.DirectoryName, "\\", "/")
+	options.TargetDirectory = stirngs.ReplaceAll(options.TargetDirectory, "\\", "/")
+
 	var wg sync.WaitGroup
 
 	for fileName, uploadedFileInfo := range uploadedfiles {
@@ -214,7 +217,7 @@ func getTargetFileName(uploadedFileName, targetDirectory, directoryToDownload st
 	uploadedFileName = strings.TrimPrefix(uploadedFileName, "/")
 	uploadedFileName = strings.TrimPrefix(uploadedFileName, "\\")
 
-	uploadedFileName = strings.TrimPrefix(uploadedFileName, directoryToDownload[:strings.LastIndex(directoryToDownload, string(os.PathSeparator))])
+	uploadedFileName = strings.TrimPrefix(uploadedFileName, directoryToDownload[:strings.LastIndex(directoryToDownload, "/")])
 
 	return path.Join(targetDirectory, uploadedFileName)
 }
