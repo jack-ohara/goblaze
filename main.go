@@ -67,6 +67,10 @@ func main() {
 			log.Fatalln("Destination directory does not exist: ", *downloadDestination)
 		}
 
+		if err != nil {
+			log.Fatalln(err)
+		}
+
 		if !fileInfo.IsDir() {
 			log.Fatalln("Expected 'dest' argument to point to a directory but it is a file: ", *downloadDestination)
 		}
