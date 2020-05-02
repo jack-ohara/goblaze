@@ -72,8 +72,8 @@ func UploadDirectory(directoryPath, encryptionPassphrase, bucketID string, autho
 func DownloadDirectory(options DownloadOptions, decryptionPassphrase string, authorizationInfo accountauthorization.AuthorizeAccountResponse) {
 	uploadedfiles := uploadedfiles.GetUploadedFiles()
 
-	options.DirectoryName = stirngs.ReplaceAll(options.DirectoryName, "\\", "/")
-	options.TargetDirectory = stirngs.ReplaceAll(options.TargetDirectory, "\\", "/")
+	options.DirectoryName = strings.ReplaceAll(options.DirectoryName, "\\", "/")
+	options.TargetDirectory = strings.ReplaceAll(options.TargetDirectory, "\\", "/")
 
 	var wg sync.WaitGroup
 
