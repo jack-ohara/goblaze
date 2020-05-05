@@ -15,7 +15,9 @@ func EncryptFile(filePath, passphrase string) []byte {
 	data, err := ioutil.ReadFile(filePath)
 
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+
+		return nil
 	}
 
 	return EncryptData(data, passphrase)

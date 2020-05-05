@@ -125,6 +125,10 @@ func getUploadURL(authInfo accountauthorization.AuthorizeAccountResponse, bucket
 func performUpload(filePath, encryptionPassphrase string, getUploadURLResponse getUploadURLResponse) UploadFileResponse {
 	encryptedFileContents := encryption.EncryptFile(filePath, encryptionPassphrase)
 
+	if encryptedFileContents == nil {
+		return UploadFileResponse{StatusCode: 400}
+	}
+
 	hash := sha1.New()
 
 	hash.Write(encryptedFileContents)
