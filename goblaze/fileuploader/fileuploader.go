@@ -208,6 +208,9 @@ func uploadLargeFile(filePath, encryptionPassphrase, bucketID string, authorizat
 	}
 
 	wg.Wait()
+
+	close(uploadPartResponsesCh)
+
 	finishLargeFileResponse := finishLargeFile(startLargeFileResponse.FileID, authorizationInfo, partSha1s)
 
 	for uploadPartResponse := range uploadPartResponsesCh {
